@@ -137,20 +137,29 @@ if not df.empty and "月份" in df.columns:
             st.info("🥳 恭喜！本學期排練行程已全部結束，請靜候新一波公告！")
 
 
-    # 應用樣式與顯示
-    styled_df = filtered_df.reset_index(drop=True).style.apply(highlight_rows, axis=1)
-    columns_to_display = [col for col in filtered_df.columns if col not in ['type', 'datetime', '地圖連結']]
+    # 應用樣式：必須對重設索引後的 DataFrame 執行
+    styled_df = display_styled_df.style.apply(highlight_rows, axis=1) # 👈 這行不變
+
+    # 隱藏 'type' 和 'datetime' 欄位
+    columns_to_display = [col for col in display_styled_df.columns if col not in ['type', 'datetime', '地圖連結']]
     
-    st.subheader(f"📅 排練日程表 ({len(filtered_df)} 筆)")
+    st.subheader(f"📅 排練日程表 ({len(display_styled_df)} 筆)")
     
+    # 【關鍵修正】對 styled_df 使用 set_properties 修正欄位設定，並在最後選擇欄位
     st.dataframe(
-        styled_df[columns_to_display], 
+        # 這裡的 styled_df 必須先被轉回 DataFrame 才能進行欄位選擇，但在 Streamlit 中，
+        # 最好是直接讓 st.dataframe 處理帶有樣式選擇後的結果。
+        styled_df, # 👈 這裡傳遞整個樣式物件
         use_container_width=True,
         hide_index=True,
+        # 🚨 Streamlit 允許在 column_config 裡面隱藏欄位，這是最簡潔的做法
         column_config={
             "進度內容": st.column_config.TextColumn("進度內容", width="large"),
             "備註": st.column_config.TextColumn("備註", help="⚠️"),
             "月份": st.column_config.TextColumn("月份", width="small"),
+            "datetime": None, # 👈 隱藏 datetime 欄位
+            "type": None,     # 👈 隱藏 type 欄位
+            "地圖連結": None, # 👈 隱藏地圖連結的原始 URL
             "場地": st.column_config.LinkColumn(
                 "場地 (導航)", 
                 display_funcs=lambda x: x, 
