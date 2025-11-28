@@ -14,7 +14,7 @@ st.title("🎵 東吳校友合唱團 ~ SCU Choir ~ | 2025 排練看板")
 st.markdown("### 🍂 溫暖排練，效率滿點")
 st.markdown("---")
 
-# --- 2. 讀取資料 (最終防彈版) ---
+# --- 2. 讀取資料 ---
 sheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQuBpbRyxlP9-sjmm9tAGtQvtmeoUECLpThRbpdQlPyex1W-EyWvgZ2UvAovr1gqR8mAJCPpmI2c1x9/pub?gid=0&single=true&output=csv" 
 
 @st.cache_data(ttl=60)
@@ -25,7 +25,7 @@ def load_data(url):
         df = df.iloc[:, :7] 
         df.columns = ['月份', '日期', '時段', '時間', '進度內容', '場地', '備註']
         
-        # --- 數據清洗與標籤 ---
+        # --- 數據清洗 ---
         df['月份'] = df['月份'].ffill()
         df = df[df['日期'].astype(str).str.contains(r'\d', na=False)]
         df = df.fillna("")
@@ -42,7 +42,7 @@ def load_data(url):
 
         df['datetime'] = df.apply(parse_datetime, axis=1)
         
-        # 智慧標籤系統
+        # 智慧標籤
         def tag_row(row):
             content = str(row['進度內容']) + str(row['備註'])
             if "僅樂手" in content or "band and soli" in content:
@@ -66,11 +66,11 @@ def load_data(url):
 
 df = load_data(sheet_url)
 
-# --- 標記演出事件 ---
+# --- 標記演出 ---
 df['is_performance'] = df['備註'].astype(str).str.contains('演出', case=False, na=False) | \
                       df['進度內容'].astype(str).str.contains('演出', case=False, na=False)
 
-# --- 3. 顯示介面與功能 ---
+# --- 3. 顯示介面 ---
 if not df.empty and "月份" in df.columns:
     
     # 樣式定義
@@ -103,12 +103,11 @@ if not df.empty and "月份" in df.columns:
     today = datetime.now().date()
     today_str = datetime.now().strftime("%m/%d")
     
-    # 建立提醒專用資料源
     reminder_source_df = df.copy()
     if not show_small:
          reminder_source_df = reminder_source_df[reminder_source_df['type'].isin(['large', 'mixed'])]
 
-    # 1. 演出倒數 (紅色警示)
+    # 1. 演出倒數
     future_performances = df[
         (df['datetime'].dt.date >= today) & 
         (df['is_performance'] == True)
@@ -118,7 +117,6 @@ if not df.empty and "月份" in df.columns:
         perf = future_performances.iloc[0]
         p_date_obj = perf['datetime'].date()
         countdown = (p_date_obj - today).days
-        
         p_name = perf['進度內容'] if perf['進度內容'] else "重要演出"
         p_date = perf['日期']
         p_time = perf['時間']
@@ -130,7 +128,7 @@ if not df.empty and "月份" in df.columns:
             f"📅 **日期:** {p_date} ｜ ⏰ **時間:** {p_time} ｜ 📍 **地點:** {p_loc}"
         )
 
-    # 2. 下次排練/事件提醒 (智慧清單化呈現)
+    # 2. 下次排練/事件提醒
     upcoming_events_real = reminder_source_df[reminder_source_df['datetime'].dt.date >= today].sort_values(by='datetime', na_position='last')
 
     if not upcoming_events_real.empty:
@@ -140,62 +138,60 @@ if not df.empty and "月份" in df.columns:
         next_location = next_event['場地']
         raw_content = next_event['進度內容'] 
 
-        # 🌟【關鍵功能】：智慧格式化 (時段分離 + 曲目清單)
+        # 🌟【關鍵優化】：使用標準 Markdown 清單讓對齊更完美
         def format_progress_list(content_str):
             if not content_str or str(content_str) == "nan":
                 return "暫無詳細內容"
             
-            raw_text = str(content_str).strip()
-            formatted_output = []
-            
-            # 1. 先依照「換行符號」將不同時段切開 (例如 19:30... \n 20:45...)
+            # 支援換行符號 \n 或 |
+            raw_text = str(content_str).replace('|', '\n').strip()
             lines = raw_text.split('\n')
+            
+            output_lines = []
             
             for line in lines:
                 line = line.strip()
                 if not line: continue
                 
-                # 2. 判斷是否有「冒號」來區分 時間對象 vs 曲目
-                # 處理全形與半形冒號
+                # 偵測冒號 (全形或半形)
                 if '：' in line or ':' in line:
-                    line = line.replace(':', '：') # 統一用全形
+                    line = line.replace(':', '：')
                     parts = line.split('：', 1)
-                    header = parts[0].strip() # e.g. 19:30-20:40大團
-                    song_part = parts[1].strip()
+                    header = parts[0].strip()
+                    songs_str = parts[1].strip()
                     
-                    # 加入粗體標題 (時段與對象)
-                    formatted_output.append(f"**🔸 {header}**")
+                    # 標題行 (時段/團別)
+                    output_lines.append(f"**🔸 {header}**")
                     
-                    # 3. 切割曲目 (支援 頓號、逗號)
-                    songs = re.split(r'[、,]', song_part)
+                    # 曲目清單 (使用 Markdown 的 '-' 符號自動縮排)
+                    songs = re.split(r'[、,]', songs_str)
                     for song in songs:
                         song = song.strip()
                         if song:
-                            # 縮排顯示曲目
-                            formatted_output.append(f"　　◾️ {song}")
+                            output_lines.append(f"- {song}")
+                    output_lines.append("") # 空行分隔
                 else:
-                    # 沒有冒號，直接當作純清單處理
+                    # 沒有冒號，純文字清單
                     items = re.split(r'[、,]', line)
                     for item in items:
                         item = item.strip()
                         if item:
-                            formatted_output.append(f"◾️ {item}")
-                            
-            return "  \n".join(formatted_output) # 使用 Markdown 換行
+                            output_lines.append(f"- {item}")
+            
+            return "\n".join(output_lines)
 
         formatted_content = format_progress_list(raw_content)
         
-        # 顯示區塊
         reminder_box_type = st.success if next_event['datetime'].date() == today else st.info
         reminder_title = f"🔔 **提醒：今天 ({next_date}) 要排練喔！**" if next_event['datetime'].date() == today else f"✨ **下次排練提醒：**"
         
-        # 組合顯示訊息
+        # 組合顯示 (把時間地點稍微加大)
         msg_content = (
             f"### 【本周進度:】\n"
-            f"**{next_date} 進度內容：**\n\n" # 多一個換行讓排版更鬆
-            f"{formatted_content}\n\n"
+            f"**{next_date}**\n\n"
+            f"{formatted_content}\n"
             f"---\n"
-            f"⏰ **時間:** {next_time} ｜ 📍 **地點:** {next_location}"
+            f"#### ⏰ {next_time} ｜ 📍 {next_location}"
         )
         
         reminder_box_type(reminder_title) 
@@ -208,8 +204,6 @@ if not df.empty and "月份" in df.columns:
     # ==========================================
     # 🌟 Part 3: 表格呈現
     # ==========================================
-    
-    # 應用表格篩選
     filtered_df = df.copy()
 
     if not show_small:
@@ -222,7 +216,6 @@ if not df.empty and "月份" in df.columns:
     if show_performance_only:
         filtered_df = filtered_df[filtered_df['is_performance'] == True]
 
-    # 月份合併邏輯
     def simulate_merge_month(series):
         is_first = ~series.duplicated()
         return series.where(is_first, '')
