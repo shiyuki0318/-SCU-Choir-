@@ -10,6 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
+# 🌟 採用使用者客製化標題
 st.title("🎵 東吳校友合唱團 ~ SCU Choir ~ | 2025 排練看板")
 st.markdown("### 🍂 溫暖排練，效率滿點")
 st.markdown("---")
@@ -71,6 +72,7 @@ if not df.empty and "月份" in df.columns:
     
     # 樣式定義 (白藍交替 + 小團高亮)
     def highlight_rows(row):
+        # 由於我們已經 reset_index，row.name 就是從 0 開始的行號
         is_even_row = row.name % 2 == 0
         base_bg = "#FFFFFF" if is_even_row else "#E6F0FF"
         if row['type'] in ['small', 'mixed']:
@@ -79,16 +81,14 @@ if not df.empty and "月份" in df.columns:
             style = f'color: #4B3621; background-color: {base_bg}'
         return [style] * len(row)
 
+    # --- 側邊欄篩選 (保留使用者原內容) ---
     st.sidebar.header("🔍 排練篩選")
-    
-    # 身份選擇
     st.sidebar.markdown("**您的身份是？**")
     show_small = st.sidebar.checkbox("🙋‍♂️ 我有參加「室內團 / 小團」", value=False)
     st.sidebar.markdown("---")
-
     all_months = df["月份"].unique().tolist()
     selected_month = st.sidebar.multiselect("選擇月份", all_months, default=all_months)
-    search_keyword = st.sidebar.text_input("🔎 關鍵字搜尋")
+    search_keyword = st.sidebar.text_input("🔎 搜尋關鍵字")
 
     # --- 過濾邏輯 ---
     filtered_df = df.copy()
@@ -101,7 +101,17 @@ if not df.empty and "月份" in df.columns:
         mask = filtered_df.apply(lambda x: x.astype(str).str.contains(search_keyword, case=False).any(), axis=1)
         filtered_df = filtered_df[mask]
 
-    # --- 聰明提醒：下次排練置頂 (格式修正) ---
+    # --- 🌟【新增邏輯】模擬月份合併 ---
+    def simulate_merge_month(series):
+        # 標記哪些行是月份第一次出現
+        is_first = ~series.duplicated()
+        # 非第一次出現的月份內容設為空字串，視覺上達成合併效果
+        return series.where(is_first, '')
+
+    # 僅對 '月份' 欄位應用模擬合併
+    filtered_df['月份'] = simulate_merge_month(filtered_df['月份'])
+
+    # --- 聰明提醒：下次排練置頂 (保留使用者客製化文字) ---
     today = datetime.now().date()
     today_str = datetime.now().strftime("%m/%d")
     is_rehearsal_today = False
@@ -113,13 +123,12 @@ if not df.empty and "月份" in df.columns:
         next_date = next_rehearsal['日期']
         next_time = next_rehearsal['時間']
         next_location = next_rehearsal['場地']
-        
-        # 🌟 修正後的提醒格式 (使用 markdown 換行)
+
         if next_rehearsal['datetime'].date() == today:
              is_rehearsal_today = True
              st.success(
                  f"🔔 **提醒：今天 ({next_date}) 要排練喔！請準時出席!!我們不見不散~** \n\n"
-                 f"**排練時間:** {next_time}   **地點:** {next_location}"
+                 f"**排練時間:** {next_time}    **地點:** {next_location}"
              )
         else:
              st.info(
@@ -135,7 +144,7 @@ if not df.empty and "月份" in df.columns:
             st.info("👉 請靜候新一波公告！ 👈")
 
     # 應用樣式與顯示
-    display_df = filtered_df.reset_index(drop=True)
+    display_df = filtered_df.reset_index(drop=True) # 重設索引，確保斑馬紋正確
     styled_df = display_df.style.apply(highlight_rows, axis=1)
 
     # 🌟 新增注意事項
@@ -149,6 +158,7 @@ if not df.empty and "月份" in df.columns:
         use_container_width=True,
         hide_index=True,
         column_config={
+            # 🌟 兼容性修正：所有 TextColumn 都加上 label= 關鍵字
             "進度內容": st.column_config.TextColumn(label="進度內容", width="large"),
             "備註": st.column_config.TextColumn(label="備註", help="⚠️"),
             "月份": st.column_config.TextColumn(label="月份", width="small"),
@@ -164,5 +174,6 @@ if not df.empty and "月份" in df.columns:
 else:
     st.warning("⚠️ 目前讀取不到有效資料，請檢查 Google Sheet 連結和內容。")
 
+# 🌟 採用使用者客製化頁尾
 st.markdown("---")
 st.caption("SCU Choir 2025 | Design with 💚 by 志行")
