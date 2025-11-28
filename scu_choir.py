@@ -132,7 +132,7 @@ if not df.empty and "月份" in df.columns:
         if not upcoming_rehearsals.empty:
             st.info(f"🍵 今天 ({today_str}) 沒有排練，讓喉嚨休息一下吧！ ~音樂組 關心您~ ❤️")
         else:
-            st.info("🥳 恭喜！本學期排練行程已全部結束，請靜候新一波公告！")
+            st.info("👉 請靜候新一波公告！ 👈")
 
     # 應用樣式與顯示
     display_df = filtered_df.reset_index(drop=True)
@@ -165,4 +165,4 @@ else:
     st.warning("⚠️ 目前讀取不到有效資料，請檢查 Google Sheet 連結和內容。")
 
 st.markdown("---")
-st.caption("SCU Choir 2025 | Design with 🤎")
+st.caption("SCU Choir 2025 | Design with 💚 by 志行")
