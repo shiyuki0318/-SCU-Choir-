@@ -101,7 +101,7 @@ if not df.empty and "月份" in df.columns:
         mask = filtered_df.apply(lambda x: x.astype(str).str.contains(search_keyword, case=False).any(), axis=1)
         filtered_df = filtered_df[mask]
 
-    # --- 聰明提醒：下次排練置頂 ---
+    # --- 聰明提醒：下次排練置頂 (格式修正) ---
     today = datetime.now().date()
     today_str = datetime.now().strftime("%m/%d")
     is_rehearsal_today = False
@@ -113,12 +113,19 @@ if not df.empty and "月份" in df.columns:
         next_date = next_rehearsal['日期']
         next_time = next_rehearsal['時間']
         next_location = next_rehearsal['場地']
-
+        
+        # 🌟 修正後的提醒格式 (使用 markdown 換行)
         if next_rehearsal['datetime'].date() == today:
              is_rehearsal_today = True
-             st.success(f"🔔 **提醒：今天 ({next_date}) 有排練喔！請準時出席。我們不見不散~** {next_time} 在 {next_location}")
+             st.success(
+                 f"🔔 **提醒：今天 ({next_date}) 有排練喔！請準時出席。我們不見不散~** \n\n"
+                 f"**排練時間:** {next_time} 在 {next_location}"
+             )
         else:
-             st.info(f"✨ **下次排練提醒：** {next_date} {next_time} 在 **{next_location}**！")
+             st.info(
+                 f"✨ **下次排練提醒：** {next_date} \n\n"
+                 f"**排練時間:** {next_time} 在 **{next_location}**！"
+             )
 
     # 顯示「今天沒有」的貼心訊息
     if not is_rehearsal_today:
@@ -131,6 +138,9 @@ if not df.empty and "月份" in df.columns:
     display_df = filtered_df.reset_index(drop=True)
     styled_df = display_df.style.apply(highlight_rows, axis=1)
 
+    # 🌟 新增注意事項
+    st.info("⚠️ **注意事項：** 每週排練進度有可能視排練狀況斟酌調整，以進度表最新內容為準。")
+
     # 顯示表格 (使用 column_config 隱藏不需要的欄位)
     st.subheader(f"📅 排練日程表 ({len(display_df)} 筆)")
     
@@ -139,7 +149,6 @@ if not df.empty and "月份" in df.columns:
         use_container_width=True,
         hide_index=True,
         column_config={
-            # 🌟【最終修復】移除 LinkColumn，改回 TextColumn 兼容模式
             "進度內容": st.column_config.TextColumn(label="進度內容", width="large"),
             "備註": st.column_config.TextColumn(label="備註", help="⚠️"),
             "月份": st.column_config.TextColumn(label="月份", width="small"),
