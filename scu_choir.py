@@ -9,7 +9,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🎵 SCU Choir 東吳校友合唱團 | 2025 排練看板")
+st.title("🎵 東吳校友合唱團 - SCU Choir - 2025 排練看板")
 st.markdown("### 讓排練更有效率，資訊不漏接！")
 st.markdown("---")
 
@@ -86,7 +86,7 @@ if df is not None:
             st.dataframe(today_rehearsal, use_container_width=True, hide_index=True)
         else:
             # 如果今天沒排練，顯示這句貼心的話
-            st.info(f"🍵 今天 ({today_str}) 沒有排練，讓喉嚨休息一下吧！")
+            st.info(f"🍵 今天 ({today_str}) 沒有排練，讓喉嚨休息一下吧！ ~音樂組 關心您~ ❤️")
 
     st.subheader(f"📅 排練日程表 ({len(filtered_df)} 筆資料)")
     
