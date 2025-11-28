@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🎵 SCU Choir 東吳校友合唱團 | 2025 排練看板")
+st.title("🎵 東吳校友合唱團 ~ SCU Choir ~ | 2025 排練看板")
 st.markdown("### 🍂 溫暖排練，效率滿點")
 st.markdown("---")
 
@@ -118,8 +118,8 @@ if not df.empty and "月份" in df.columns:
         if next_rehearsal['datetime'].date() == today:
              is_rehearsal_today = True
              st.success(
-                 f"🔔 **提醒：今天 ({next_date}) 有排練喔！請準時出席。我們不見不散~** \n\n"
-                 f"**排練時間:** {next_time} 地點: {next_location}"
+                 f"🔔 **提醒：今天 ({next_date}) 要排練喔！請準時出席!!我們不見不散~** \n\n"
+                 f"**排練時間:** {next_time}   **地點:** {next_location}"
              )
         else:
              st.info(
