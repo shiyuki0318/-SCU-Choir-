@@ -59,15 +59,23 @@ def load_data(url):
         df['type'] = df.apply(tag_row, axis=1)
         df = df[df['type'] != 'musician']
 
-        # 客席老師提醒 (自動加 Emoji)
-        def add_guest_icon(row):
+        # 🌟【新增功能】：日期圖示系統 (老師🤵 / 演出🎤)
+        def add_status_icons(row):
             note = str(row['備註'])
+            content = str(row['進度內容'])
             date_str = str(row['日期'])
+            
+            # 1. 客席老師
             if "老師" in note and "🤵" not in date_str:
-                return f"{date_str} 🤵"
+                date_str = f"{date_str} 🤵"
+            
+            # 2. 演出 (新增這段)
+            if ("演出" in note or "演出" in content) and "🎤" not in date_str:
+                date_str = f"{date_str} 🎤"
+                
             return date_str
 
-        df['日期'] = df.apply(add_guest_icon, axis=1)
+        df['日期'] = df.apply(add_status_icons, axis=1)
         
         return df
     except Exception as e:
@@ -83,28 +91,27 @@ df['is_performance'] = df['備註'].astype(str).str.contains('演出', case=Fals
 # --- 3. 顯示介面 ---
 if not df.empty and "月份" in df.columns:
     
-    # 🌟【高亮邏輯更新】：紅色 > 黃色 > 小團 > 斑馬紋
+    # 高亮邏輯
     def highlight_rows(row):
         note = str(row['備註'])
         content = str(row['進度內容'])
         
-        # 關鍵字清單
         alert_keywords = ["務必出席", "重要", "順排", "總彩排"]
         
-        # 1. 紅色警戒 (最高優先)
+        # 1. 紅色警戒
         is_alert = any(kw in note for kw in alert_keywords) or any(kw in content for kw in alert_keywords)
         if is_alert:
             return ['background-color: #FFCCCC; color: #8B0000; font-weight: bold'] * len(row)
         
-        # 2. 黃色提醒 (演出) - 🌟 新增功能
+        # 2. 黃色提醒 (演出)
         if "演出" in note or "演出" in content:
             return ['background-color: #FFF9C4; color: #555500; font-weight: bold'] * len(row)
         
-        # 3. 小團/室內團 (大地色)
+        # 3. 小團 (大地色)
         if row['type'] in ['small', 'mixed']:
             return ['font-weight: bold; color: #8B4513; background-color: #FFF8DC'] * len(row)
         
-        # 4. 一般斑馬紋 (白/藍)
+        # 4. 斑馬紋
         is_even_row = row.name % 2 == 0
         base_bg = "#FFFFFF" if is_even_row else "#E6F0FF"
         return [f'color: #4B3621; background-color: {base_bg}'] * len(row)
@@ -124,26 +131,24 @@ if not df.empty and "月份" in df.columns:
     search_keyword = st.sidebar.text_input("🔎 搜尋關鍵字")
 
     # ==========================================
-    # 🌟 三欄式儀表板 (Dashboard Layout)
+    # 🌟 三欄式儀表板
     # ==========================================
     today = datetime.now().date()
     today_str = datetime.now().strftime("%m/%d")
     
-    # 提醒專用資料源
     reminder_source_df = df.copy()
     if not show_small:
          reminder_source_df = reminder_source_df[reminder_source_df['type'].isin(['large', 'mixed'])]
 
-    # 1. 準備演出資料
+    # 1. 演出資料
     future_performances = df[
         (df['datetime'].dt.date >= today) & 
         (df['is_performance'] == True)
     ].sort_values(by='datetime', na_position='last')
 
-    # 2. 準備下次排練資料
+    # 2. 下次排練資料
     upcoming_events_real = reminder_source_df[reminder_source_df['datetime'].dt.date >= today].sort_values(by='datetime', na_position='last')
 
-    # 版面：左(排練提醒) -> 中(排練進度) -> 右(演出倒數)
     col1, col2, col3 = st.columns([1, 1.2, 0.8])
 
     # --- 左欄：排練提醒 ---
@@ -173,7 +178,7 @@ if not df.empty and "月份" in df.columns:
                 st.markdown("#### ✨ 下次排練")
                 st.info("目前無排練行程")
 
-    # --- 中欄：排練進度 (詳細清單) ---
+    # --- 中欄：排練進度 (強力修復版) ---
     with col2:
         with st.container(border=True):
             st.markdown(f"#### 📖 本周進度")
@@ -181,23 +186,26 @@ if not df.empty and "月份" in df.columns:
             if not upcoming_events_real.empty:
                 raw_content = next_event['進度內容']
                 
-                # 🌟【格式化邏輯更新】：強制偵測並換行
                 def format_progress_list(content_str):
                     if not content_str or str(content_str) == "nan":
                         return "暫無詳細內容"
                     
-                    # 1. 強制修復：如果發現「時間區段」(如 20:45-21:40) 黏在文字後面，強制加換行
-                    # 邏輯：搜尋 "數字:數字-數字:數字" 的模式，並確保它前面有換行
                     raw_text = str(content_str).replace('|', '\n').strip()
-                    # 正則表達式：尋找類似 19:30-21:00 這種格式
-                    raw_text = re.sub(r'(\d{1,2}:\d{2}-\d{1,2}:\d{2})', r'\n\1', raw_text)
                     
-                    # 清理可能產生的多餘空行
+                    # 🌟【超級強力正則表達式】：強制切割所有時間段
+                    # 尋找類似 "19:30-20:40" 或 "20:45~21:40" 這樣的模式
+                    # (?<!^) 表示不要在字串開頭就加換行
+                    # \d{1,2}[:：]\d{2} 匹配時間 (支援全形/半形冒號)
+                    # \s*[-~–—]\s* 匹配連接號 (支援連字號、波浪號、En Dash、Em Dash、空格)
+                    time_pattern = r'(?<!^)(\d{1,2}[:：]\d{2}\s*[-~–—]\s*\d{1,2}[:：]\d{2})'
+                    
+                    # 在這些時間模式前面強制加上換行符號 \n
+                    raw_text = re.sub(time_pattern, r'\n\1', raw_text)
+                    
                     lines = [line.strip() for line in raw_text.split('\n') if line.strip()]
                     output_lines = []
                     
                     for line in lines:
-                        # 2. 處理標題與清單
                         split_idx = -1
                         for i, char in enumerate(line):
                             if char == '：': 
@@ -296,7 +304,7 @@ if not df.empty and "月份" in df.columns:
         height=500
     )
 
-    st.caption("🎨 圖例說明： 🔴 **紅色 = 務必出席/順排/總彩排** | 🟡 **黃色 = 演出** | 🟠 **褐字 = 包含小團**")
+    st.caption("🎨 圖例說明： 🔴 **紅色 = 務必出席** | 🟡 **黃色 = 演出** | 🟠 **褐字 = 包含小團**")
 
 else:
     st.warning("⚠️ 目前讀取不到有效資料，請檢查 Google Sheet 連結和內容。")
