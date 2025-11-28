@@ -138,12 +138,12 @@ if not df.empty and "月份" in df.columns:
         next_location = next_event['場地']
         raw_content = next_event['進度內容'] 
 
-        # 🌟【關鍵優化】：使用標準 Markdown 清單讓對齊更完美
+        # 🌟【核心修復】：智慧識別時間冒號 vs 分隔冒號
         def format_progress_list(content_str):
             if not content_str or str(content_str) == "nan":
                 return "暫無詳細內容"
             
-            # 支援換行符號 \n 或 |
+            # 1. 處理換行
             raw_text = str(content_str).replace('|', '\n').strip()
             lines = raw_text.split('\n')
             
@@ -153,25 +153,38 @@ if not df.empty and "月份" in df.columns:
                 line = line.strip()
                 if not line: continue
                 
-                # 偵測冒號 (全形或半形)
-                if '：' in line or ':' in line:
-                    line = line.replace(':', '：')
-                    parts = line.split('：', 1)
-                    header = parts[0].strip()
-                    songs_str = parts[1].strip()
+                # 2. 尋找正確的分隔點
+                split_idx = -1
+                for i, char in enumerate(line):
+                    if char == '：': # 全形冒號絕對是分隔符
+                        split_idx = i
+                        break
+                    if char == ':': 
+                        # 半形冒號：必須檢查它是不是「時間」的一部分
+                        # 如果前後都是數字 (例如 19:30)，則忽略它，繼續找下一個
+                        prev_is_digit = (i > 0 and line[i-1].isdigit())
+                        next_is_digit = (i < len(line) - 1 and line[i+1].isdigit())
+                        if not (prev_is_digit and next_is_digit):
+                            # 如果不是夾在數字中間，那它就是我們要的分隔符！
+                            split_idx = i
+                            break
+                
+                if split_idx != -1:
+                    # 找到了分隔符，進行切割
+                    header = line[:split_idx].strip()
+                    songs_str = line[split_idx+1:].strip()
                     
-                    # 標題行 (時段/團別)
                     output_lines.append(f"**🔸 {header}**")
                     
-                    # 曲目清單 (使用 Markdown 的 '-' 符號自動縮排)
+                    # 曲目清單
                     songs = re.split(r'[、,]', songs_str)
                     for song in songs:
                         song = song.strip()
                         if song:
                             output_lines.append(f"- {song}")
-                    output_lines.append("") # 空行分隔
+                    output_lines.append("") # 空行
                 else:
-                    # 沒有冒號，純文字清單
+                    # 沒找到分隔符 (例如純清單或純時間)，直接顯示
                     items = re.split(r'[、,]', line)
                     for item in items:
                         item = item.strip()
@@ -185,7 +198,6 @@ if not df.empty and "月份" in df.columns:
         reminder_box_type = st.success if next_event['datetime'].date() == today else st.info
         reminder_title = f"🔔 **提醒：今天 ({next_date}) 要排練喔！**" if next_event['datetime'].date() == today else f"✨ **下次排練提醒：**"
         
-        # 組合顯示 (把時間地點稍微加大)
         msg_content = (
             f"### 【本周進度:】\n"
             f"**{next_date}**\n\n"
