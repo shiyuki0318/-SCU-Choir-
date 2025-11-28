@@ -10,7 +10,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# 🌟 採用使用者客製化標題
 st.title("🎵 東吳校友合唱團 ~ SCU Choir ~ | 2025 排練看板")
 st.markdown("### 🍂 溫暖排練，效率滿點")
 st.markdown("---")
@@ -31,7 +30,7 @@ def load_data(url):
         df = df[df['日期'].astype(str).str.contains(r'\d', na=False)]
         df = df.fillna("")
 
-        # 🌟 日期解析
+        # 日期解析
         def parse_datetime(row):
             try:
                 date_part = str(row['日期']).split('(')[0].strip()
@@ -99,18 +98,17 @@ if not df.empty and "月份" in df.columns:
     search_keyword = st.sidebar.text_input("🔎 搜尋關鍵字")
 
     # ==========================================
-    # 🌟 Part 1 & 2: 獨立提醒計算 (不受表格篩選影響)
+    # 🌟 Part 1 & 2: 獨立提醒計算
     # ==========================================
     today = datetime.now().date()
     today_str = datetime.now().strftime("%m/%d")
     
-    # 【關鍵修正】：建立一個專門用於「提醒」的資料源
-    # 它只受「身份(大小團)」影響，不受「月份」、「關鍵字」、「演出篩選」影響
+    # 建立提醒專用資料源 (只受大小團身份影響)
     reminder_source_df = df.copy()
     if not show_small:
          reminder_source_df = reminder_source_df[reminder_source_df['type'].isin(['large', 'mixed'])]
 
-    # 1. 演出倒數 (搜尋全局最近演出)
+    # 1. 演出倒數 (紅色警示)
     future_performances = df[
         (df['datetime'].dt.date >= today) & 
         (df['is_performance'] == True)
@@ -132,8 +130,7 @@ if not df.empty and "月份" in df.columns:
             f"📅 **日期:** {p_date} ｜ ⏰ **時間:** {p_time} ｜ 📍 **地點:** {p_loc}"
         )
 
-    # 2. 下次排練/事件提醒 (基於 reminder_source_df 搜尋真實的下一次活動)
-    # 這裡的邏輯是：即使表格篩選到12月，這裡依然會抓到 11/28 的排練
+    # 2. 下次排練/事件提醒 (清單化呈現)
     upcoming_events_real = reminder_source_df[reminder_source_df['datetime'].dt.date >= today].sort_values(by='datetime', na_position='last')
 
     if not upcoming_events_real.empty:
@@ -141,26 +138,54 @@ if not df.empty and "月份" in df.columns:
         next_date = next_event['日期']
         next_time = next_event['時間']
         next_location = next_event['場地']
+        raw_content = next_event['進度內容'] # 原始排練內容
+
+        # 🌟【關鍵功能】：將排練內容格式化為清單
+        def format_progress_list(content_str):
+            if not content_str or str(content_str) == "nan":
+                return "暫無詳細內容"
+            
+            # 1. 處理換行
+            text = str(content_str).strip()
+            # 將頓號取代為換行+方塊
+            text = text.replace('、', '\n◾️ ')
+            # 將原本的換行也加上方塊
+            text = text.replace('\n', '\n◾️ ')
+            
+            # 確保第一行也有方塊
+            if not text.startswith('◾️'):
+                text = f"◾️ {text}"
+                
+            return text
+
+        formatted_content = format_progress_list(raw_content)
         
-        if next_event['datetime'].date() == today:
-             st.success(
-                 f"🔔 **提醒：今天 ({next_date}) 要排練喔！請準時出席!!我們不見不散~** \n\n"
-                 f"**排練時間:** {next_time}    **地點:** {next_location}"
-             )
-        else:
-             st.info(
-                 f"✨ **下次排練提醒：** {next_date} \n\n"
-                 f"**排練時間:** {next_time} 在 **{next_location}**！"
-             )
+        # 顯示區塊
+        reminder_box_type = st.success if next_event['datetime'].date() == today else st.info
+        reminder_title = f"🔔 **提醒：今天 ({next_date}) 要排練喔！**" if next_event['datetime'].date() == today else f"✨ **下次排練提醒：**"
+        
+        # 組合顯示訊息 (使用 markdown 語法)
+        msg_content = (
+            f"### 【本周進度:】\n"
+            f"**{next_date} 進度：**\n"
+            f"{formatted_content}\n\n"
+            f"---\n"
+            f"⏰ **時間:** {next_time} ｜ 📍 **地點:** {next_location}"
+        )
+        
+        # 顯示
+        reminder_box_type(reminder_title) # 標題
+        st.markdown(msg_content)          # 內容 (為了讓清單排版更漂亮，使用 markdown 輸出)
+        
     else:
         st.info(f"🍵 今天 ({today_str}) 沒有排練，讓喉嚨休息一下吧！ ~音樂組 關心您~ ❤️")
 
 
     # ==========================================
-    # 🌟 Part 3: 表格呈現 (完全聽從篩選指令)
+    # 🌟 Part 3: 表格呈現
     # ==========================================
     
-    # 這裡才應用所有的篩選條件到表格用的 DataFrame
+    # 應用表格篩選
     filtered_df = df.copy()
 
     if not show_small:
