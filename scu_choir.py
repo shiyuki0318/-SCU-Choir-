@@ -22,7 +22,7 @@ def get_map_link(location):
     base_url = "https://www.google.com/maps/search/"
     return f"{base_url}{search_query}"
 
-# --- 2. 讀取資料 (最終防彈版，省略部分註解) ---
+# --- 2. 讀取資料 (最終防彈版) ---
 sheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQuBpbRyxlP9-sjmm9tAGtQvtmeoUECLpThRbpdQlPyex1W-EyWvgZ2UvAovr1gqR8mAJCPpmI2c1x9/pub?gid=0&single=true&output=csv" 
 
 @st.cache_data(ttl=60)
@@ -38,7 +38,6 @@ def load_data(url):
         df = df.fillna("")
 
         # 🌟 日期解析 (確保能正確判斷下次排練)
-        current_year = datetime.now().year
         def parse_datetime(row):
             try:
                 date_part = str(row['日期']).split('(')[0].strip()
@@ -89,6 +88,8 @@ if not df.empty and "月份" in df.columns:
         return [style] * len(row)
 
     st.sidebar.header("🔍 排練篩選")
+    
+    # 身份選擇
     st.sidebar.markdown("**您的身份是？**")
     show_small = st.sidebar.checkbox("🙋‍♂️ 我有參加「室內團 / 小團」", value=False)
     st.sidebar.markdown("---")
@@ -99,6 +100,7 @@ if not df.empty and "月份" in df.columns:
 
     # --- 過濾邏輯 ---
     filtered_df = df.copy()
+
     if not show_small:
         filtered_df = filtered_df[filtered_df['type'].isin(['large', 'mixed'])]
     if selected_month:
@@ -107,7 +109,7 @@ if not df.empty and "月份" in df.columns:
         mask = filtered_df.apply(lambda x: x.astype(str).str.contains(search_keyword, case=False).any(), axis=1)
         filtered_df = filtered_df[mask]
 
-    # --- 🌟 聰明提醒：下次排練置頂 (加入客製化文字) ---
+    # --- 🌟 聰明提醒：下次排練置頂 (貼心訊息) ---
     today = datetime.now().date()
     today_str = datetime.now().strftime("%m/%d")
     is_rehearsal_today = False
@@ -122,37 +124,32 @@ if not df.empty and "月份" in df.columns:
 
         if next_rehearsal['datetime'].date() == today:
              is_rehearsal_today = True
-             # 貼心訊息 1: 今天有排練
              st.success(f"🔔 **提醒：今天 ({next_date}) 有排練喔！請準時出席。我們不見不散~** {next_time} 在 {next_location}")
         else:
-             # 貼心訊息 2: 下次排練
              st.info(f"✨ **下次排練提醒：** {next_date} {next_time} 在 **{next_location}**！")
 
-    # 顯示「今天沒有」的貼心訊息 (只在今天沒排練，但未來還有排練時顯示)
+    # 顯示「今天沒有」的貼心訊息
     if not is_rehearsal_today:
         if not upcoming_rehearsals.empty:
             st.info(f"🍵 今天 ({today_str}) 沒有排練，讓喉嚨休息一下吧！ ~音樂組 關心您~ ❤️")
         else:
-            # 如果連未來排練都沒有 (空閒中)
             st.info("🥳 恭喜！本學期排練行程已全部結束，請靜候新一波公告！")
 
-
-    # 應用樣式：必須對重設索引後的 DataFrame 執行
-    styled_df = display_styled_df.style.apply(highlight_rows, axis=1) # 👈 這行不變
+    # 🌟【NameError Fix】修正：定義並重設索引
+    display_df = filtered_df.reset_index(drop=True)
+    
+    # 應用樣式：必須對定義後的變數執行
+    styled_df = display_df.style.apply(highlight_rows, axis=1)
 
     # 隱藏 'type' 和 'datetime' 欄位
-    columns_to_display = [col for col in display_styled_df.columns if col not in ['type', 'datetime', '地圖連結']]
     
-    st.subheader(f"📅 排練日程表 ({len(display_styled_df)} 筆)")
+    st.subheader(f"📅 排練日程表 ({len(display_df)} 筆)")
     
-    # 【關鍵修正】對 styled_df 使用 set_properties 修正欄位設定，並在最後選擇欄位
+    # 顯示表格 (使用 column_config 隱藏不需要的欄位)
     st.dataframe(
-        # 這裡的 styled_df 必須先被轉回 DataFrame 才能進行欄位選擇，但在 Streamlit 中，
-        # 最好是直接讓 st.dataframe 處理帶有樣式選擇後的結果。
-        styled_df, # 👈 這裡傳遞整個樣式物件
+        styled_df, # 傳遞樣式物件
         use_container_width=True,
         hide_index=True,
-        # 🚨 Streamlit 允許在 column_config 裡面隱藏欄位，這是最簡潔的做法
         column_config={
             "進度內容": st.column_config.TextColumn("進度內容", width="large"),
             "備註": st.column_config.TextColumn("備註", help="⚠️"),
