@@ -31,12 +31,11 @@ def load_data(url):
         df = df[df['日期'].astype(str).str.contains(r'\d', na=False)]
         df = df.fillna("")
 
-        # 🌟 日期解析 (確保能正確判斷下次排練)
+        # 🌟 日期解析
         def parse_datetime(row):
             try:
                 date_part = str(row['日期']).split('(')[0].strip()
                 month, day = map(int, date_part.split('/'))
-                # 這裡假設年份是 2025 或 2026 (根據實際排練表進行調整)
                 year = 2025 if month >= 11 else 2026 
                 return datetime(year, month, day)
             except:
@@ -44,7 +43,7 @@ def load_data(url):
 
         df['datetime'] = df.apply(parse_datetime, axis=1)
         
-        # 智慧標籤系統 (用於小團/大團高亮)
+        # 智慧標籤系統
         def tag_row(row):
             content = str(row['進度內容']) + str(row['備註'])
             if "僅樂手" in content or "band and soli" in content:
@@ -68,14 +67,14 @@ def load_data(url):
 
 df = load_data(sheet_url)
 
-# --- 🌟 新增：標籤演出事件 (用於篩選與提醒) ---
+# --- 🌟 新增：標記演出事件 ---
 df['is_performance'] = df['備註'].astype(str).str.contains('演出', case=False, na=False) | \
                       df['進度內容'].astype(str).str.contains('演出', case=False, na=False)
 
 # --- 3. 顯示介面與功能 ---
 if not df.empty and "月份" in df.columns:
     
-    # 樣式定義 (白藍交替 + 小團高亮)
+    # 樣式定義
     def highlight_rows(row):
         is_even_row = row.name % 2 == 0
         base_bg = "#FFFFFF" if is_even_row else "#E6F0FF"
@@ -85,13 +84,11 @@ if not df.empty and "月份" in df.columns:
             style = f'color: #4B3621; background-color: {base_bg}'
         return [style] * len(row)
 
-    # --- 側邊欄篩選 ---
+    # --- 側邊欄 ---
     st.sidebar.header("🔍 排練篩選")
-    
     st.sidebar.markdown("**您的身份是？**")
     show_small = st.sidebar.checkbox("🙋‍♂️ 我有參加「室內團 / 小團」", value=False)
     
-    # 🌟 新增：演出時間篩選按鈕
     st.sidebar.markdown("---")
     st.sidebar.markdown("**特別篩選**")
     show_performance_only = st.sidebar.checkbox("🎬 僅顯示「演出」時間", value=False)
@@ -111,112 +108,88 @@ if not df.empty and "月份" in df.columns:
     if search_keyword:
         mask = filtered_df.apply(lambda x: x.astype(str).str.contains(search_keyword, case=False).any(), axis=1)
         filtered_df = filtered_df[mask]
-        
-    # 🌟 新增：演出時間過濾邏輯
     if show_performance_only:
         filtered_df = filtered_df[filtered_df['is_performance'] == True]
 
-    # --- 聰明提醒：下次排練置頂 (修改邏輯為演出優先) ---
+    # ==========================================
+    # 🌟 Part 1: 演出倒數 (獨立顯示，最顯眼)
+    # ==========================================
     today = datetime.now().date()
     today_str = datetime.now().strftime("%m/%d")
-    reminder_shown = False
-    
-    # 1. 從完整的 df 找出最近的【演出】 (確保演出倒數不受排練篩選影響)
-    all_upcoming_performances = df[
+
+    # 搜尋最近的演出 (不受篩選影響，永遠顯示最近的大演出)
+    future_performances = df[
         (df['datetime'].dt.date >= today) & 
         (df['is_performance'] == True)
     ].sort_values(by='datetime', na_position='last')
 
-    nearest_performance = None
-    if not all_upcoming_performances.empty and pd.notna(all_upcoming_performances.iloc[0]['datetime']):
-        nearest_performance = all_upcoming_performances.iloc[0]
+    if not future_performances.empty:
+        perf = future_performances.iloc[0]
+        p_date_obj = perf['datetime'].date()
+        countdown = (p_date_obj - today).days
         
-    # A. 優先顯示演出倒數 (不受側邊欄篩選影響)
-    if nearest_performance is not None:
-        performance_date_dt = nearest_performance['datetime'].date()
-        countdown_days = (performance_date_dt - today).days
-        
-        if countdown_days >= 0:
-            p_date = nearest_performance['日期']
-            p_time = nearest_performance['時間']
-            p_location = nearest_performance['場地']
-            p_content = nearest_performance['進度內容']
-            
-            # 🌟 顯示演出倒數計時
-            st.success(
-                f"🎉 **【重要演出倒數】**： **{p_content}** \n\n"
-                f"**演出日期:** {p_date} \n"
-                f"**距離演出倒數:** {countdown_days} 天"
-                f"\n\n**演出時間:** {p_time} **地點:** {p_location}"
-            )
-            reminder_shown = True
+        # 組合顯示內容
+        p_name = perf['進度內容'] if perf['進度內容'] else "重要演出"
+        p_date = perf['日期']
+        p_time = perf['時間']
+        p_loc = perf['場地']
 
-    # 2. 找出過濾後的【最近事件】
-    upcoming_events_filtered = filtered_df[filtered_df['datetime'].dt.date >= today].sort_values(by='datetime', na_position='last')
-    nearest_event_filtered = upcoming_events_filtered.iloc[0] if not upcoming_events_filtered.empty and pd.notna(upcoming_events_filtered.iloc[0]['datetime']) else None
+        # 使用 Warning (黃色/橘色) 區塊來做顯眼的倒數
+        st.warning(
+            f"### ⏳ **距離演出倒數： {countdown} 天**\n"
+            f"**{p_name}**\n\n"
+            f"📅 **日期:** {p_date} ｜ ⏰ **時間:** {p_time} ｜ 📍 **地點:** {p_loc}"
+        )
 
-    # B. 顯示下次排練提醒 (只在沒有演出倒數時顯示，且下一個事件不是演出)
-    if not reminder_shown and nearest_event_filtered is not None:
-        
-        event_is_performance = nearest_event_filtered['is_performance']
-        
-        # 只有當下一個事件是排練時才顯示常規提醒 (因為演出的提醒已由 Case A 處理)
-        if not event_is_performance:
-            
-            next_event = nearest_event_filtered
-            next_date = next_event['日期']
-            next_time = next_event['時間']
-            next_location = next_event['場地']
-            
-            if next_event['datetime'].date() == today:
-                 # 🌟 今天排練格式
-                 st.success(
-                     f"🔔 **提醒：今天 ({next_date}) 要排練喔！請準時出席!!我們不見不散~** \n\n"
-                     f"**排練時間:** {next_time}    **地點:** {next_location}"
-                 )
-            else:
-                 # 🌟 下次排練格式
-                 st.info(
-                     f"✨ **下次排練提醒：** {next_date} \n\n"
-                     f"**排練時間:** {next_time} 在 **{next_location}**！"
-                 )
-            reminder_shown = True
-
-    # C. 處理今天沒有排練/演出的情況
-    if not reminder_shown:
-        
-        # 檢查今天是否有任何事件 (即使被篩選器隱藏)
-        today_has_event = not df[df['datetime'].dt.date == today].empty
-        
-        if today_has_event:
-            # 今天有活動但被篩選器濾掉 (e.g. 篩選小團但今天是只有大團)，不顯示 "今天沒有"
-            pass 
-        elif not upcoming_events_filtered.empty:
-            # 今天沒有活動，但未來有活動
-            st.info(f"🍵 今天 ({today_str}) 沒有排練，讓喉嚨休息一下吧！ ~音樂組 關心您~ ❤️")
-        else:
-            # 季度結束
-            st.info("👉 請靜候新一波公告！ 👈")
-            
-    # --- 表格顯示 ---
+    # ==========================================
+    # 🌟 Part 2: 下次排練/事件提醒 (獨立顯示)
+    # ==========================================
     
-    # 🌟【月份合併邏輯】
+    # 搜尋「被篩選後」的最近事件 (包含排練或演出)
+    upcoming_events = filtered_df[filtered_df['datetime'].dt.date >= today].sort_values(by='datetime', na_position='last')
+
+    if not upcoming_events.empty:
+        next_event = upcoming_events.iloc[0]
+        next_date = next_event['日期']
+        next_time = next_event['時間']
+        next_location = next_event['場地']
+        
+        # 判斷是今天還是未來
+        if next_event['datetime'].date() == today:
+             st.success(
+                 f"🔔 **提醒：今天 ({next_date}) 要排練喔！請準時出席!!我們不見不散~** \n\n"
+                 f"**排練時間:** {next_time}    **地點:** {next_location}"
+             )
+        else:
+             st.info(
+                 f"✨ **下次排練提醒：** {next_date} \n\n"
+                 f"**排練時間:** {next_time} 在 **{next_location}**！"
+             )
+    else:
+        # 如果真的完全沒有未來的行程
+        st.info(f"🍵 今天 ({today_str}) 沒有排練，讓喉嚨休息一下吧！ ~音樂組 關心您~ ❤️")
+
+
+    # ==========================================
+    # 🌟 Part 3: 表格呈現
+    # ==========================================
+    
+    # 月份合併邏輯
     def simulate_merge_month(series):
         is_first = ~series.duplicated()
         return series.where(is_first, '')
 
     filtered_df['月份'] = simulate_merge_month(filtered_df['月份'])
-    display_df = filtered_df.reset_index(drop=True) # 重設索引，確保斑馬紋正確
+    display_df = filtered_df.reset_index(drop=True)
     styled_df = display_df.style.apply(highlight_rows, axis=1)
 
-    # 🌟 新增注意事項 (使用者要求)
-    st.info("⚠️ **注意事項：** 每週排練進度有可能視排練狀況斟酌調整，以進度表最新內容為準。")
+    st.markdown("### ⚠️ **注意事項：**")
+    st.caption("每週排練進度有可能視排練狀況斟酌調整，以進度表最新內容為準。")
 
-    # 顯示表格 (使用 column_config 隱藏不需要的欄位)
     st.subheader(f"📅 排練日程表 ({len(display_df)} 筆)")
     
     st.dataframe(
-        styled_df, # 傳遞樣式物件
+        styled_df, 
         use_container_width=True,
         hide_index=True,
         column_config={
@@ -225,7 +198,8 @@ if not df.empty and "月份" in df.columns:
             "月份": st.column_config.TextColumn(label="月份", width="small"),
             "場地": st.column_config.TextColumn(label="場地", width="medium"), 
             "datetime": None, 
-            "type": None,     
+            "type": None,
+            "is_performance": None
         },
         height=500
     )
@@ -235,6 +209,5 @@ if not df.empty and "月份" in df.columns:
 else:
     st.warning("⚠️ 目前讀取不到有效資料，請檢查 Google Sheet 連結和內容。")
 
-# 🌟 採用使用者客製化頁尾
 st.markdown("---")
 st.caption("SCU Choir 2025 | Design with 💚 by 志行")
