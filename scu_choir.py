@@ -67,7 +67,7 @@ def load_data(url):
 
 df = load_data(sheet_url)
 
-# --- 🌟 新增：標記演出事件 ---
+# --- 標記演出事件 ---
 df['is_performance'] = df['備註'].astype(str).str.contains('演出', case=False, na=False) | \
                       df['進度內容'].astype(str).str.contains('演出', case=False, na=False)
 
@@ -98,7 +98,69 @@ if not df.empty and "月份" in df.columns:
     selected_month = st.sidebar.multiselect("選擇月份", all_months, default=all_months)
     search_keyword = st.sidebar.text_input("🔎 搜尋關鍵字")
 
-    # --- 過濾邏輯 ---
+    # ==========================================
+    # 🌟 Part 1 & 2: 獨立提醒計算 (不受表格篩選影響)
+    # ==========================================
+    today = datetime.now().date()
+    today_str = datetime.now().strftime("%m/%d")
+    
+    # 【關鍵修正】：建立一個專門用於「提醒」的資料源
+    # 它只受「身份(大小團)」影響，不受「月份」、「關鍵字」、「演出篩選」影響
+    reminder_source_df = df.copy()
+    if not show_small:
+         reminder_source_df = reminder_source_df[reminder_source_df['type'].isin(['large', 'mixed'])]
+
+    # 1. 演出倒數 (搜尋全局最近演出)
+    future_performances = df[
+        (df['datetime'].dt.date >= today) & 
+        (df['is_performance'] == True)
+    ].sort_values(by='datetime', na_position='last')
+
+    if not future_performances.empty:
+        perf = future_performances.iloc[0]
+        p_date_obj = perf['datetime'].date()
+        countdown = (p_date_obj - today).days
+        
+        p_name = perf['進度內容'] if perf['進度內容'] else "重要演出"
+        p_date = perf['日期']
+        p_time = perf['時間']
+        p_loc = perf['場地']
+
+        st.warning(
+            f"### ⏳ **距離演出倒數： {countdown} 天**\n"
+            f"**{p_name}**\n\n"
+            f"📅 **日期:** {p_date} ｜ ⏰ **時間:** {p_time} ｜ 📍 **地點:** {p_loc}"
+        )
+
+    # 2. 下次排練/事件提醒 (基於 reminder_source_df 搜尋真實的下一次活動)
+    # 這裡的邏輯是：即使表格篩選到12月，這裡依然會抓到 11/28 的排練
+    upcoming_events_real = reminder_source_df[reminder_source_df['datetime'].dt.date >= today].sort_values(by='datetime', na_position='last')
+
+    if not upcoming_events_real.empty:
+        next_event = upcoming_events_real.iloc[0]
+        next_date = next_event['日期']
+        next_time = next_event['時間']
+        next_location = next_event['場地']
+        
+        if next_event['datetime'].date() == today:
+             st.success(
+                 f"🔔 **提醒：今天 ({next_date}) 要排練喔！請準時出席!!我們不見不散~** \n\n"
+                 f"**排練時間:** {next_time}    **地點:** {next_location}"
+             )
+        else:
+             st.info(
+                 f"✨ **下次排練提醒：** {next_date} \n\n"
+                 f"**排練時間:** {next_time} 在 **{next_location}**！"
+             )
+    else:
+        st.info(f"🍵 今天 ({today_str}) 沒有排練，讓喉嚨休息一下吧！ ~音樂組 關心您~ ❤️")
+
+
+    # ==========================================
+    # 🌟 Part 3: 表格呈現 (完全聽從篩選指令)
+    # ==========================================
+    
+    # 這裡才應用所有的篩選條件到表格用的 DataFrame
     filtered_df = df.copy()
 
     if not show_small:
@@ -111,69 +173,6 @@ if not df.empty and "月份" in df.columns:
     if show_performance_only:
         filtered_df = filtered_df[filtered_df['is_performance'] == True]
 
-    # ==========================================
-    # 🌟 Part 1: 演出倒數 (獨立顯示，最顯眼)
-    # ==========================================
-    today = datetime.now().date()
-    today_str = datetime.now().strftime("%m/%d")
-
-    # 搜尋最近的演出 (不受篩選影響，永遠顯示最近的大演出)
-    future_performances = df[
-        (df['datetime'].dt.date >= today) & 
-        (df['is_performance'] == True)
-    ].sort_values(by='datetime', na_position='last')
-
-    if not future_performances.empty:
-        perf = future_performances.iloc[0]
-        p_date_obj = perf['datetime'].date()
-        countdown = (p_date_obj - today).days
-        
-        # 組合顯示內容
-        p_name = perf['進度內容'] if perf['進度內容'] else "重要演出"
-        p_date = perf['日期']
-        p_time = perf['時間']
-        p_loc = perf['場地']
-
-        # 使用 Warning (黃色/橘色) 區塊來做顯眼的倒數
-        st.warning(
-            f"### ⏳ **距離演出倒數： {countdown} 天**\n"
-            f"**{p_name}**\n\n"
-            f"📅 **日期:** {p_date} ｜ ⏰ **時間:** {p_time} ｜ 📍 **地點:** {p_loc}"
-        )
-
-    # ==========================================
-    # 🌟 Part 2: 下次排練/事件提醒 (獨立顯示)
-    # ==========================================
-    
-    # 搜尋「被篩選後」的最近事件 (包含排練或演出)
-    upcoming_events = filtered_df[filtered_df['datetime'].dt.date >= today].sort_values(by='datetime', na_position='last')
-
-    if not upcoming_events.empty:
-        next_event = upcoming_events.iloc[0]
-        next_date = next_event['日期']
-        next_time = next_event['時間']
-        next_location = next_event['場地']
-        
-        # 判斷是今天還是未來
-        if next_event['datetime'].date() == today:
-             st.success(
-                 f"🔔 **提醒：今天 ({next_date}) 要排練喔！請準時出席!!我們不見不散~** \n\n"
-                 f"**排練時間:** {next_time}    **地點:** {next_location}"
-             )
-        else:
-             st.info(
-                 f"✨ **下次排練提醒：** {next_date} \n\n"
-                 f"**排練時間:** {next_time} 在 **{next_location}**！"
-             )
-    else:
-        # 如果真的完全沒有未來的行程
-        st.info(f"🍵 今天 ({today_str}) 沒有排練，讓喉嚨休息一下吧！ ~音樂組 關心您~ ❤️")
-
-
-    # ==========================================
-    # 🌟 Part 3: 表格呈現
-    # ==========================================
-    
     # 月份合併邏輯
     def simulate_merge_month(series):
         is_first = ~series.duplicated()
