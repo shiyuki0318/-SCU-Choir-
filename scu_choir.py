@@ -32,7 +32,7 @@ def load_data(url):
         df = df.iloc[:, :7] 
         df.columns = ['月份', '日期', '時段', '時間', '進度內容', '場地', '備註']
         
-        # --- 數據清洗與標籤 (省略，與上次相同) ---
+        # --- 數據清洗與標籤 ---
         df['月份'] = df['月份'].ffill()
         df = df[df['日期'].astype(str).str.contains(r'\d', na=False)]
         df = df.fillna("")
@@ -50,7 +50,7 @@ def load_data(url):
         df['datetime'] = df.apply(parse_datetime, axis=1)
         df['地圖連結'] = df['場地'].apply(get_map_link)
         
-        # 智慧標籤系統 (省略，與上次相同)
+        # 智慧標籤系統
         def tag_row(row):
             content = str(row['進度內容']) + str(row['備註'])
             if "僅樂手" in content or "band and soli" in content:
@@ -147,13 +147,14 @@ if not df.empty and "月份" in df.columns:
         use_container_width=True,
         hide_index=True,
         column_config={
-            "進度內容": st.column_config.TextColumn("進度內容", width="large"),
-            "備註": st.column_config.TextColumn("備註", help="⚠️"),
-            "月份": st.column_config.TextColumn("月份", width="small"),
+            # 🌟【關鍵修正】: 所有 TextColumn 都加上 label= 關鍵字
+            "進度內容": st.column_config.TextColumn(label="進度內容", width="large"),
+            "備註": st.column_config.TextColumn(label="備註", help="⚠️"),
+            "月份": st.column_config.TextColumn(label="月份", width="small"),
             "datetime": None, 
             "type": None,     
             "地圖連結": None, 
-            "場地": st.column_config.LinkColumn( # 🌟【最終修正】: 加入 label= 關鍵字
+            "場地": st.column_config.LinkColumn(
                 label="場地 (導航)", 
                 display_funcs=lambda x: x, 
                 href="地圖連結", 
