@@ -14,20 +14,13 @@ st.title("🎵 SCU Choir 東吳校友合唱團 | 2025 排練看板")
 st.markdown("### 🍂 溫暖排練，效率滿點")
 st.markdown("---")
 
-# --- 輔助函數：將場地名稱轉換為 Google Maps 連結 ---
-def get_map_link(location):
-    if not location:
-        return ""
-    search_query = location.replace(" ", "+")
-    base_url = "https://www.google.com/maps/search/"
-    return f"{base_url}{search_query}"
-
 # --- 2. 讀取資料 (最終防彈版) ---
 sheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQuBpbRyxlP9-sjmm9tAGtQvtmeoUECLpThRbpdQlPyex1W-EyWvgZ2UvAovr1gqR8mAJCPpmI2c1x9/pub?gid=0&single=true&output=csv" 
 
 @st.cache_data(ttl=60)
 def load_data(url):
     try:
+        # 使用最強解析器
         df = pd.read_csv(url, header=None, on_bad_lines='skip', engine='python') 
         df = df.iloc[:, :7] 
         df.columns = ['月份', '日期', '時段', '時間', '進度內容', '場地', '備註']
@@ -37,7 +30,7 @@ def load_data(url):
         df = df[df['日期'].astype(str).str.contains(r'\d', na=False)]
         df = df.fillna("")
 
-        # 🌟 日期解析
+        # 🌟 日期解析 (確保能正確判斷下次排練)
         def parse_datetime(row):
             try:
                 date_part = str(row['日期']).split('(')[0].strip()
@@ -48,7 +41,6 @@ def load_data(url):
                 return pd.NaT
 
         df['datetime'] = df.apply(parse_datetime, axis=1)
-        df['地圖連結'] = df['場地'].apply(get_map_link)
         
         # 智慧標籤系統
         def tag_row(row):
@@ -147,19 +139,13 @@ if not df.empty and "月份" in df.columns:
         use_container_width=True,
         hide_index=True,
         column_config={
-            # 🌟【關鍵修正】: 所有 TextColumn 都加上 label= 關鍵字
+            # 🌟【最終修復】移除 LinkColumn，改回 TextColumn 兼容模式
             "進度內容": st.column_config.TextColumn(label="進度內容", width="large"),
             "備註": st.column_config.TextColumn(label="備註", help="⚠️"),
             "月份": st.column_config.TextColumn(label="月份", width="small"),
+            "場地": st.column_config.TextColumn(label="場地", width="medium"), 
             "datetime": None, 
             "type": None,     
-            "地圖連結": None, 
-            "場地": st.column_config.LinkColumn(
-                label="場地 (導航)", 
-                display_funcs=lambda x: x, 
-                href="地圖連結", 
-                width="medium"
-            )
         },
         height=500
     )
