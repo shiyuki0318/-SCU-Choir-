@@ -119,7 +119,7 @@ if not df.empty and "月份" in df.columns:
              is_rehearsal_today = True
              st.success(
                  f"🔔 **提醒：今天 ({next_date}) 有排練喔！請準時出席。我們不見不散~** \n\n"
-                 f"**排練時間:** {next_time} 在 {next_location}"
+                 f"**排練時間:** {next_time} 地點: {next_location}"
              )
         else:
              st.info(
