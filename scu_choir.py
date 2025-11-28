@@ -59,11 +59,10 @@ def load_data(url):
         df['type'] = df.apply(tag_row, axis=1)
         df = df[df['type'] != 'musician']
 
-        # 🌟【新增功能】：客席老師提醒 (自動加 Emoji)
+        # 🌟 客席老師提醒 (自動加 Emoji)
         def add_guest_icon(row):
             note = str(row['備註'])
             date_str = str(row['日期'])
-            # 如果備註有「老師」，且日期還沒加過 Emoji
             if "老師" in note and "🤵" not in date_str:
                 return f"{date_str} 🤵"
             return date_str
@@ -84,12 +83,19 @@ df['is_performance'] = df['備註'].astype(str).str.contains('演出', case=Fals
 # --- 3. 顯示介面 ---
 if not df.empty and "月份" in df.columns:
     
-    # 🌟【新增功能】：紅色高亮警示
+    # 🌟【關鍵修改】：紅色高亮警示邏輯
     def highlight_rows(row):
         note = str(row['備註'])
+        content = str(row['進度內容'])
         
-        # 優先級 1: 務必出席 (紅色警戒)
-        if "務必出席" in note or "重要" in note:
+        # 關鍵字清單：只要出現這些詞，就是紅色警戒
+        alert_keywords = ["務必出席", "重要", "順排", "總彩排"]
+        
+        # 檢查 備註 或 進度內容 是否包含關鍵字
+        is_alert = any(kw in note for kw in alert_keywords) or any(kw in content for kw in alert_keywords)
+        
+        # 優先級 1: 紅色警戒
+        if is_alert:
             return ['background-color: #FFCCCC; color: #8B0000; font-weight: bold'] * len(row)
         
         # 優先級 2: 小團/室內團 (大地色高亮)
@@ -135,8 +141,8 @@ if not df.empty and "月份" in df.columns:
     # 2. 準備下次排練資料
     upcoming_events_real = reminder_source_df[reminder_source_df['datetime'].dt.date >= today].sort_values(by='datetime', na_position='last')
 
-    # 🌟【版面調整】：左(排練提醒) -> 中(排練進度) -> 右(演出倒數)
-    col1, col2, col3 = st.columns([1, 1.2, 0.8]) # 稍微調整寬度比例
+    # 版面：左(排練提醒) -> 中(排練進度) -> 右(演出倒數)
+    col1, col2, col3 = st.columns([1, 1.2, 0.8])
 
     # --- 左欄：排練提醒 (時間地點) ---
     with col1:
@@ -160,10 +166,8 @@ if not df.empty and "月份" in df.columns:
                 if is_today:
                     st.success("請準時出席，不見不散！")
                 else:
-                    # 顯示倒數幾天
                     days_left = (next_event['datetime'].date() - today).days
                     st.caption(f"距離下次排練還有 {days_left} 天")
-
             else:
                 st.markdown("#### ✨ 下次排練")
                 st.info("目前無排練行程")
@@ -223,7 +227,7 @@ if not df.empty and "月份" in df.columns:
             else:
                 st.info("休息是為了走更長遠的路")
 
-    # --- 右欄：演出倒數 (移到最右邊) ---
+    # --- 右欄：演出倒數 ---
     with col3:
         with st.container(border=True): 
             st.markdown(f"#### ⏳ 演出倒數")
@@ -232,7 +236,6 @@ if not df.empty and "月份" in df.columns:
                 countdown = (perf['datetime'].date() - today).days
                 p_name = perf['進度內容'] if perf['進度內容'] else "年度公演"
                 
-                # 簡化顯示，聚焦在天數
                 st.metric(
                     label=f"距離 {p_name}", 
                     value=f"{countdown} 天"
@@ -288,7 +291,7 @@ if not df.empty and "月份" in df.columns:
         height=500
     )
 
-    st.caption("🎨 圖例說明： 🟤 一般字體 = 大團行程 | 🟠 **粗體褐字 = 包含小團/室內團行程** | 🔴 **紅色背景 = 務必出席**")
+    st.caption("🎨 圖例說明： 🟤 一般字體 = 大團行程 | 🟠 **粗體褐字 = 包含小團/室內團行程** | 🔴 **紅色背景 = 務必出席/順排/總彩排**")
 
 else:
     st.warning("⚠️ 目前讀取不到有效資料，請檢查 Google Sheet 連結和內容。")
