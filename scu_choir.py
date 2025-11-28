@@ -59,7 +59,7 @@ def load_data(url):
         df['type'] = df.apply(tag_row, axis=1)
         df = df[df['type'] != 'musician']
 
-        # 🌟 客席老師提醒 (自動加 Emoji)
+        # 客席老師提醒 (自動加 Emoji)
         def add_guest_icon(row):
             note = str(row['備註'])
             date_str = str(row['日期'])
@@ -83,26 +83,28 @@ df['is_performance'] = df['備註'].astype(str).str.contains('演出', case=Fals
 # --- 3. 顯示介面 ---
 if not df.empty and "月份" in df.columns:
     
-    # 🌟【關鍵修改】：紅色高亮警示邏輯
+    # 🌟【高亮邏輯更新】：紅色 > 黃色 > 小團 > 斑馬紋
     def highlight_rows(row):
         note = str(row['備註'])
         content = str(row['進度內容'])
         
-        # 關鍵字清單：只要出現這些詞，就是紅色警戒
+        # 關鍵字清單
         alert_keywords = ["務必出席", "重要", "順排", "總彩排"]
         
-        # 檢查 備註 或 進度內容 是否包含關鍵字
+        # 1. 紅色警戒 (最高優先)
         is_alert = any(kw in note for kw in alert_keywords) or any(kw in content for kw in alert_keywords)
-        
-        # 優先級 1: 紅色警戒
         if is_alert:
             return ['background-color: #FFCCCC; color: #8B0000; font-weight: bold'] * len(row)
         
-        # 優先級 2: 小團/室內團 (大地色高亮)
+        # 2. 黃色提醒 (演出) - 🌟 新增功能
+        if "演出" in note or "演出" in content:
+            return ['background-color: #FFF9C4; color: #555500; font-weight: bold'] * len(row)
+        
+        # 3. 小團/室內團 (大地色)
         if row['type'] in ['small', 'mixed']:
             return ['font-weight: bold; color: #8B4513; background-color: #FFF8DC'] * len(row)
         
-        # 優先級 3: 一般斑馬紋 (白/藍)
+        # 4. 一般斑馬紋 (白/藍)
         is_even_row = row.name % 2 == 0
         base_bg = "#FFFFFF" if is_even_row else "#E6F0FF"
         return [f'color: #4B3621; background-color: {base_bg}'] * len(row)
@@ -144,7 +146,7 @@ if not df.empty and "月份" in df.columns:
     # 版面：左(排練提醒) -> 中(排練進度) -> 右(演出倒數)
     col1, col2, col3 = st.columns([1, 1.2, 0.8])
 
-    # --- 左欄：排練提醒 (時間地點) ---
+    # --- 左欄：排練提醒 ---
     with col1:
         with st.container(border=True):
             if not upcoming_events_real.empty:
@@ -153,7 +155,6 @@ if not df.empty and "月份" in df.columns:
                 next_time = next_event['時間']
                 next_location = next_event['場地']
                 
-                # 判斷是否為今天
                 is_today = next_event['datetime'].date() == today
                 icon = "🔔" if is_today else "✨"
                 title = "今天排練！" if is_today else "下次排練"
@@ -180,19 +181,23 @@ if not df.empty and "月份" in df.columns:
             if not upcoming_events_real.empty:
                 raw_content = next_event['進度內容']
                 
-                # 智慧格式化清單
+                # 🌟【格式化邏輯更新】：強制偵測並換行
                 def format_progress_list(content_str):
                     if not content_str or str(content_str) == "nan":
                         return "暫無詳細內容"
                     
+                    # 1. 強制修復：如果發現「時間區段」(如 20:45-21:40) 黏在文字後面，強制加換行
+                    # 邏輯：搜尋 "數字:數字-數字:數字" 的模式，並確保它前面有換行
                     raw_text = str(content_str).replace('|', '\n').strip()
-                    lines = raw_text.split('\n')
+                    # 正則表達式：尋找類似 19:30-21:00 這種格式
+                    raw_text = re.sub(r'(\d{1,2}:\d{2}-\d{1,2}:\d{2})', r'\n\1', raw_text)
+                    
+                    # 清理可能產生的多餘空行
+                    lines = [line.strip() for line in raw_text.split('\n') if line.strip()]
                     output_lines = []
                     
                     for line in lines:
-                        line = line.strip()
-                        if not line: continue
-                        
+                        # 2. 處理標題與清單
                         split_idx = -1
                         for i, char in enumerate(line):
                             if char == '：': 
@@ -291,7 +296,7 @@ if not df.empty and "月份" in df.columns:
         height=500
     )
 
-    st.caption("🎨 圖例說明： 🟤 一般字體 = 大團行程 | 🟠 **粗體褐字 = 包含小團/室內團行程** | 🔴 **紅色背景 = 務必出席/順排/總彩排**")
+    st.caption("🎨 圖例說明： 🔴 **紅色 = 務必出席/順排/總彩排** | 🟡 **黃色 = 演出** | 🟠 **褐字 = 包含小團**")
 
 else:
     st.warning("⚠️ 目前讀取不到有效資料，請檢查 Google Sheet 連結和內容。")
