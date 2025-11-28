@@ -14,7 +14,7 @@ st.title("🎵 SCU Choir 東吳校友合唱團 | 2025 排練看板")
 st.markdown("### 🍂 溫暖排練，效率滿點")
 st.markdown("---")
 
-# --- 輔助函數：將場地名稱轉換為 Google Maps 連結 (省略，與上次相同) ---
+# --- 輔助函數：將場地名稱轉換為 Google Maps 連結 ---
 def get_map_link(location):
     if not location:
         return ""
@@ -32,17 +32,17 @@ def load_data(url):
         df = df.iloc[:, :7] 
         df.columns = ['月份', '日期', '時段', '時間', '進度內容', '場地', '備註']
         
-        # --- 數據清洗與標籤 ---
+        # --- 數據清洗與標籤 (省略，與上次相同) ---
         df['月份'] = df['月份'].ffill()
         df = df[df['日期'].astype(str).str.contains(r'\d', na=False)]
         df = df.fillna("")
 
-        # 🌟 日期解析 (確保能正確判斷下次排練)
+        # 🌟 日期解析
         def parse_datetime(row):
             try:
                 date_part = str(row['日期']).split('(')[0].strip()
                 month, day = map(int, date_part.split('/'))
-                year = 2025 if month >= 11 else 2026 # 簡化跨年邏輯
+                year = 2025 if month >= 11 else 2026 
                 return datetime(year, month, day)
             except:
                 return pd.NaT
@@ -109,7 +109,7 @@ if not df.empty and "月份" in df.columns:
         mask = filtered_df.apply(lambda x: x.astype(str).str.contains(search_keyword, case=False).any(), axis=1)
         filtered_df = filtered_df[mask]
 
-    # --- 🌟 聰明提醒：下次排練置頂 (貼心訊息) ---
+    # --- 聰明提醒：下次排練置頂 ---
     today = datetime.now().date()
     today_str = datetime.now().strftime("%m/%d")
     is_rehearsal_today = False
@@ -135,17 +135,13 @@ if not df.empty and "月份" in df.columns:
         else:
             st.info("🥳 恭喜！本學期排練行程已全部結束，請靜候新一波公告！")
 
-    # 🌟【NameError Fix】修正：定義並重設索引
+    # 應用樣式與顯示
     display_df = filtered_df.reset_index(drop=True)
-    
-    # 應用樣式：必須對定義後的變數執行
     styled_df = display_df.style.apply(highlight_rows, axis=1)
 
-    # 隱藏 'type' 和 'datetime' 欄位
-    
+    # 顯示表格 (使用 column_config 隱藏不需要的欄位)
     st.subheader(f"📅 排練日程表 ({len(display_df)} 筆)")
     
-    # 顯示表格 (使用 column_config 隱藏不需要的欄位)
     st.dataframe(
         styled_df, # 傳遞樣式物件
         use_container_width=True,
@@ -154,11 +150,11 @@ if not df.empty and "月份" in df.columns:
             "進度內容": st.column_config.TextColumn("進度內容", width="large"),
             "備註": st.column_config.TextColumn("備註", help="⚠️"),
             "月份": st.column_config.TextColumn("月份", width="small"),
-            "datetime": None, # 👈 隱藏 datetime 欄位
-            "type": None,     # 👈 隱藏 type 欄位
-            "地圖連結": None, # 👈 隱藏地圖連結的原始 URL
-            "場地": st.column_config.LinkColumn(
-                "場地 (導航)", 
+            "datetime": None, 
+            "type": None,     
+            "地圖連結": None, 
+            "場地": st.column_config.LinkColumn( # 🌟【最終修正】: 加入 label= 關鍵字
+                label="場地 (導航)", 
                 display_funcs=lambda x: x, 
                 href="地圖連結", 
                 width="medium"
