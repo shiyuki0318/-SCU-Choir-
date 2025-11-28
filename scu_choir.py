@@ -56,7 +56,7 @@ if df is not None:
 
     # [功能 B] 關鍵字搜尋
     st.sidebar.markdown("---")
-    search_keyword = st.sidebar.text_input("🔎 搜尋關鍵字", placeholder="輸入: 慈音老師, 小團, 新光...")
+    search_keyword = st.sidebar.text_input("🔎 搜尋關鍵字", placeholder="輸入: 遊藝,小團, ...")
 
     # --- 4. 資料篩選邏輯 ---
     filtered_df = df.copy()
@@ -81,7 +81,7 @@ if df is not None:
         today_rehearsal = df[df['日期'].astype(str).str.contains(today_str, na=False)]
         
         if not today_rehearsal.empty:
-            st.success(f"🔔 **提醒：今天 ({today_str}) 有排練！請準時出席。**")
+            st.success(f"🔔 **提醒：今天 ({today_str}) 有排練喔！請準時出席。我們不見不散~**")
             # 特別顯示今天的行程
             st.dataframe(today_rehearsal, use_container_width=True, hide_index=True)
         else:
