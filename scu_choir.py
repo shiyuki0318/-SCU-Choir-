@@ -98,120 +98,127 @@ if not df.empty and "月份" in df.columns:
     search_keyword = st.sidebar.text_input("🔎 搜尋關鍵字")
 
     # ==========================================
-    # 🌟 Part 1 & 2: 獨立提醒計算
+    # 🌟 三欄式儀表板 (Dashboard Layout)
     # ==========================================
     today = datetime.now().date()
     today_str = datetime.now().strftime("%m/%d")
     
+    # 提醒專用資料源
     reminder_source_df = df.copy()
     if not show_small:
          reminder_source_df = reminder_source_df[reminder_source_df['type'].isin(['large', 'mixed'])]
 
-    # 1. 演出倒數
+    # 1. 準備演出資料 (左欄)
     future_performances = df[
         (df['datetime'].dt.date >= today) & 
         (df['is_performance'] == True)
     ].sort_values(by='datetime', na_position='last')
 
-    if not future_performances.empty:
-        perf = future_performances.iloc[0]
-        p_date_obj = perf['datetime'].date()
-        countdown = (p_date_obj - today).days
-        p_name = perf['進度內容'] if perf['進度內容'] else "重要演出"
-        p_date = perf['日期']
-        p_time = perf['時間']
-        p_loc = perf['場地']
-
-        st.warning(
-            f"### ⏳ **距離演出倒數： {countdown} 天**\n"
-            f"**{p_name}**\n\n"
-            f"📅 **日期:** {p_date} ｜ ⏰ **時間:** {p_time} ｜ 📍 **地點:** {p_loc}"
-        )
-
-    # 2. 下次排練/事件提醒
+    # 2. 準備下次排練資料 (中欄 & 右欄)
     upcoming_events_real = reminder_source_df[reminder_source_df['datetime'].dt.date >= today].sort_values(by='datetime', na_position='last')
 
-    if not upcoming_events_real.empty:
-        next_event = upcoming_events_real.iloc[0]
-        next_date = next_event['日期']
-        next_time = next_event['時間']
-        next_location = next_event['場地']
-        raw_content = next_event['進度內容'] 
+    # 🌟 建立三欄 (Col 1, Col 2, Col 3)
+    col1, col2, col3 = st.columns(3)
 
-        # 🌟【核心修復】：智慧識別時間冒號 vs 分隔冒號
-        def format_progress_list(content_str):
-            if not content_str or str(content_str) == "nan":
-                return "暫無詳細內容"
-            
-            # 1. 處理換行
-            raw_text = str(content_str).replace('|', '\n').strip()
-            lines = raw_text.split('\n')
-            
-            output_lines = []
-            
-            for line in lines:
-                line = line.strip()
-                if not line: continue
+    # --- 左欄：演出倒數 ---
+    with col1:
+        with st.container(border=True): # 加上邊框像卡片
+            if not future_performances.empty:
+                perf = future_performances.iloc[0]
+                countdown = (perf['datetime'].date() - today).days
+                p_name = perf['進度內容'] if perf['進度內容'] else "年度公演"
                 
-                # 2. 尋找正確的分隔點
-                split_idx = -1
-                for i, char in enumerate(line):
-                    if char == '：': # 全形冒號絕對是分隔符
-                        split_idx = i
-                        break
-                    if char == ':': 
-                        # 半形冒號：必須檢查它是不是「時間」的一部分
-                        # 如果前後都是數字 (例如 19:30)，則忽略它，繼續找下一個
-                        prev_is_digit = (i > 0 and line[i-1].isdigit())
-                        next_is_digit = (i < len(line) - 1 and line[i+1].isdigit())
-                        if not (prev_is_digit and next_is_digit):
-                            # 如果不是夾在數字中間，那它就是我們要的分隔符！
-                            split_idx = i
-                            break
+                st.markdown(f"#### ⏳ 演出倒數")
+                st.metric(
+                    label=f"{p_name}", 
+                    value=f"{countdown} 天",
+                    help=f"日期: {perf['日期']} | 地點: {perf['場地']}"
+                )
+            else:
+                st.markdown("#### ⏳ 演出倒數")
+                st.info("目前無待辦演出")
+
+    # --- 中欄：排練提醒 (時間地點) ---
+    with col2:
+        with st.container(border=True):
+            if not upcoming_events_real.empty:
+                next_event = upcoming_events_real.iloc[0]
+                next_date = next_event['日期']
+                next_time = next_event['時間']
+                next_location = next_event['場地']
                 
-                if split_idx != -1:
-                    # 找到了分隔符，進行切割
-                    header = line[:split_idx].strip()
-                    songs_str = line[split_idx+1:].strip()
-                    
-                    output_lines.append(f"**🔸 {header}**")
-                    
-                    # 曲目清單
-                    songs = re.split(r'[、,]', songs_str)
-                    for song in songs:
-                        song = song.strip()
-                        if song:
-                            output_lines.append(f"- {song}")
-                    output_lines.append("") # 空行
-                else:
-                    # 沒找到分隔符 (例如純清單或純時間)，直接顯示
-                    items = re.split(r'[、,]', line)
-                    for item in items:
-                        item = item.strip()
-                        if item:
-                            output_lines.append(f"- {item}")
+                # 判斷是否為今天
+                icon = "🔔" if next_event['datetime'].date() == today else "✨"
+                title = "今天排練！" if next_event['datetime'].date() == today else "下次排練"
+                color = "red" if next_event['datetime'].date() == today else "blue"
+                
+                st.markdown(f"#### {icon} {title}")
+                st.markdown(f"**日期：** {next_date}")
+                st.markdown(f"**時間：** {next_time}")
+                st.markdown(f"**地點：** {next_location}")
+                
+                if next_event['datetime'].date() == today:
+                    st.caption("請準時出席，不見不散！")
+            else:
+                st.markdown("#### ✨ 下次排練")
+                st.info("目前無排練行程")
+
+    # --- 右欄：排練進度 (詳細清單) ---
+    with col3:
+        with st.container(border=True):
+            st.markdown(f"#### 📖 本周進度")
             
-            return "\n".join(output_lines)
+            if not upcoming_events_real.empty:
+                raw_content = next_event['進度內容']
+                
+                # 智慧格式化清單
+                def format_progress_list(content_str):
+                    if not content_str or str(content_str) == "nan":
+                        return "暫無詳細內容"
+                    
+                    raw_text = str(content_str).replace('|', '\n').strip()
+                    lines = raw_text.split('\n')
+                    output_lines = []
+                    
+                    for line in lines:
+                        line = line.strip()
+                        if not line: continue
+                        
+                        split_idx = -1
+                        for i, char in enumerate(line):
+                            if char == '：': 
+                                split_idx = i
+                                break
+                            if char == ':': 
+                                prev_is_digit = (i > 0 and line[i-1].isdigit())
+                                next_is_digit = (i < len(line) - 1 and line[i+1].isdigit())
+                                if not (prev_is_digit and next_is_digit):
+                                    split_idx = i
+                                    break
+                        
+                        if split_idx != -1:
+                            header = line[:split_idx].strip()
+                            songs_str = line[split_idx+1:].strip()
+                            output_lines.append(f"**🔸 {header}**")
+                            songs = re.split(r'[、,]', songs_str)
+                            for song in songs:
+                                song = song.strip()
+                                if song:
+                                    output_lines.append(f"- {song}")
+                        else:
+                            items = re.split(r'[、,]', line)
+                            for item in items:
+                                item = item.strip()
+                                if item:
+                                    output_lines.append(f"- {item}")
+                    return "\n".join(output_lines)
 
-        formatted_content = format_progress_list(raw_content)
-        
-        reminder_box_type = st.success if next_event['datetime'].date() == today else st.info
-        reminder_title = f"🔔 **提醒：今天 ({next_date}) 要排練喔！**" if next_event['datetime'].date() == today else f"✨ **下次排練提醒：**"
-        
-        msg_content = (
-            f"### 【本周進度:】\n"
-            f"**{next_date}**\n\n"
-            f"{formatted_content}\n"
-            f"---\n"
-            f"#### ⏰ {next_time} ｜ 📍 {next_location}"
-        )
-        
-        reminder_box_type(reminder_title) 
-        st.markdown(msg_content)          
-        
-    else:
-        st.info(f"🍵 今天 ({today_str}) 沒有排練，讓喉嚨休息一下吧！ ~音樂組 關心您~ ❤️")
+                formatted_content = format_progress_list(raw_content)
+                st.markdown(formatted_content)
+            else:
+                st.info("休息是為了走更長遠的路")
 
+    st.markdown("---") # 與下方表格的分隔線
 
     # ==========================================
     # 🌟 Part 3: 表格呈現
