@@ -103,7 +103,7 @@ if not df.empty and "月份" in df.columns:
     today = datetime.now().date()
     today_str = datetime.now().strftime("%m/%d")
     
-    # 建立提醒專用資料源 (只受大小團身份影響)
+    # 建立提醒專用資料源
     reminder_source_df = df.copy()
     if not show_small:
          reminder_source_df = reminder_source_df[reminder_source_df['type'].isin(['large', 'mixed'])]
@@ -130,7 +130,7 @@ if not df.empty and "月份" in df.columns:
             f"📅 **日期:** {p_date} ｜ ⏰ **時間:** {p_time} ｜ 📍 **地點:** {p_loc}"
         )
 
-    # 2. 下次排練/事件提醒 (清單化呈現)
+    # 2. 下次排練/事件提醒 (智慧清單化呈現)
     upcoming_events_real = reminder_source_df[reminder_source_df['datetime'].dt.date >= today].sort_values(by='datetime', na_position='last')
 
     if not upcoming_events_real.empty:
@@ -138,25 +138,50 @@ if not df.empty and "月份" in df.columns:
         next_date = next_event['日期']
         next_time = next_event['時間']
         next_location = next_event['場地']
-        raw_content = next_event['進度內容'] # 原始排練內容
+        raw_content = next_event['進度內容'] 
 
-        # 🌟【關鍵功能】：將排練內容格式化為清單
+        # 🌟【關鍵功能】：智慧格式化 (時段分離 + 曲目清單)
         def format_progress_list(content_str):
             if not content_str or str(content_str) == "nan":
                 return "暫無詳細內容"
             
-            # 1. 處理換行
-            text = str(content_str).strip()
-            # 將頓號取代為換行+方塊
-            text = text.replace('、', '\n◾️ ')
-            # 將原本的換行也加上方塊
-            text = text.replace('\n', '\n◾️ ')
+            raw_text = str(content_str).strip()
+            formatted_output = []
             
-            # 確保第一行也有方塊
-            if not text.startswith('◾️'):
-                text = f"◾️ {text}"
+            # 1. 先依照「換行符號」將不同時段切開 (例如 19:30... \n 20:45...)
+            lines = raw_text.split('\n')
+            
+            for line in lines:
+                line = line.strip()
+                if not line: continue
                 
-            return text
+                # 2. 判斷是否有「冒號」來區分 時間對象 vs 曲目
+                # 處理全形與半形冒號
+                if '：' in line or ':' in line:
+                    line = line.replace(':', '：') # 統一用全形
+                    parts = line.split('：', 1)
+                    header = parts[0].strip() # e.g. 19:30-20:40大團
+                    song_part = parts[1].strip()
+                    
+                    # 加入粗體標題 (時段與對象)
+                    formatted_output.append(f"**🔸 {header}**")
+                    
+                    # 3. 切割曲目 (支援 頓號、逗號)
+                    songs = re.split(r'[、,]', song_part)
+                    for song in songs:
+                        song = song.strip()
+                        if song:
+                            # 縮排顯示曲目
+                            formatted_output.append(f"　　◾️ {song}")
+                else:
+                    # 沒有冒號，直接當作純清單處理
+                    items = re.split(r'[、,]', line)
+                    for item in items:
+                        item = item.strip()
+                        if item:
+                            formatted_output.append(f"◾️ {item}")
+                            
+            return "  \n".join(formatted_output) # 使用 Markdown 換行
 
         formatted_content = format_progress_list(raw_content)
         
@@ -164,18 +189,17 @@ if not df.empty and "月份" in df.columns:
         reminder_box_type = st.success if next_event['datetime'].date() == today else st.info
         reminder_title = f"🔔 **提醒：今天 ({next_date}) 要排練喔！**" if next_event['datetime'].date() == today else f"✨ **下次排練提醒：**"
         
-        # 組合顯示訊息 (使用 markdown 語法)
+        # 組合顯示訊息
         msg_content = (
             f"### 【本周進度:】\n"
-            f"**{next_date} 進度：**\n"
+            f"**{next_date} 進度內容：**\n\n" # 多一個換行讓排版更鬆
             f"{formatted_content}\n\n"
             f"---\n"
             f"⏰ **時間:** {next_time} ｜ 📍 **地點:** {next_location}"
         )
         
-        # 顯示
-        reminder_box_type(reminder_title) # 標題
-        st.markdown(msg_content)          # 內容 (為了讓清單排版更漂亮，使用 markdown 輸出)
+        reminder_box_type(reminder_title) 
+        st.markdown(msg_content)          
         
     else:
         st.info(f"🍵 今天 ({today_str}) 沒有排練，讓喉嚨休息一下吧！ ~音樂組 關心您~ ❤️")
