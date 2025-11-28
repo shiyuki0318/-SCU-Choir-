@@ -1,118 +1,170 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import re
 
 # --- 1. 網頁基礎設定 ---
 st.set_page_config(
-    page_title="SCU Choir 排練進度表", 
+    page_title="SCU Choir 排練進度", 
     page_icon="🎵", 
     layout="wide"
 )
 
-st.title("🎵 東吳校友合唱團 - SCU Choir - 2025 排練看板")
-st.markdown("### 讓排練更有效率，資訊不漏接！")
+st.title("🎵 SCU Choir 東吳校友合唱團 | 2025 排練看板")
+st.markdown("### 🍂 溫暖排練，效率滿點")
 st.markdown("---")
 
-# --- 2. 讀取資料 (使用您的 Google Sheet 網址) ---
-# 這是您剛剛提供的公開 CSV 連結
-sheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQuBpbRyxlP9-sjmm9tAGtQvtmeoUECLpThRbpdQlPyex1W-EyWvgZ2UvAovr1gqR8mAJCPpmI2c1x9/pub?gid=0&single=true&output=csv"
+# --- 輔助函數：將場地名稱轉換為 Google Maps 連結 (省略，與上次相同) ---
+def get_map_link(location):
+    if not location:
+        return ""
+    search_query = location.replace(" ", "+")
+    base_url = "https://www.google.com/maps/search/"
+    return f"{base_url}{search_query}"
 
-@st.cache_data(ttl=60) # 每 60 秒會自動檢查一次有沒有新資料
+# --- 2. 讀取資料 (最終防彈版，省略部分註解) ---
+sheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQuBpbRyxlP9-sjmm9tAGtQvtmeoUECLpThRbpdQlPyex1W-EyWvgZ2UvAovr1gqR8mAJCPpmI2c1x9/pub?gid=0&single=true&output=csv" 
+
+@st.cache_data(ttl=60)
 def load_data(url):
     try:
-        # 讀取 CSV
-        df = pd.read_csv(url)
+        df = pd.read_csv(url, header=None, on_bad_lines='skip', engine='python') 
+        df = df.iloc[:, :7] 
+        df.columns = ['月份', '日期', '時段', '時間', '進度內容', '場地', '備註']
         
-        # 資料清洗：把全空的行刪掉
-        df = df.dropna(how="all")
-        
-        # 填補月份 (處理合併儲存格的邏輯)
-        # 確保 '月份' 欄位存在才執行填補
-        if '月份' in df.columns:
-            df['月份'] = df['月份'].ffill()
-        
-        # 將 NaN (空值) 填補為空字串，避免網頁顯示 "None"
+        # --- 數據清洗與標籤 ---
+        df['月份'] = df['月份'].ffill()
+        df = df[df['日期'].astype(str).str.contains(r'\d', na=False)]
         df = df.fillna("")
-            
+
+        # 🌟 日期解析 (確保能正確判斷下次排練)
+        current_year = datetime.now().year
+        def parse_datetime(row):
+            try:
+                date_part = str(row['日期']).split('(')[0].strip()
+                month, day = map(int, date_part.split('/'))
+                year = 2025 if month >= 11 else 2026 # 簡化跨年邏輯
+                return datetime(year, month, day)
+            except:
+                return pd.NaT
+
+        df['datetime'] = df.apply(parse_datetime, axis=1)
+        df['地圖連結'] = df['場地'].apply(get_map_link)
+        
+        # 智慧標籤系統 (省略，與上次相同)
+        def tag_row(row):
+            content = str(row['進度內容']) + str(row['備註'])
+            if "僅樂手" in content or "band and soli" in content:
+                return "musician"
+            is_small = "小團" in content or "室內團" in content
+            is_large = "大團" in content or "全部人員" in content or "所有曲目" in content
+            if is_small and is_large:
+                return "mixed"
+            elif is_small:
+                return "small"
+            else:
+                return "large"
+
+        df['type'] = df.apply(tag_row, axis=1)
+        df = df[df['type'] != 'musician']
+        
         return df
     except Exception as e:
-        st.error(f"❌ 讀取資料失敗，請確認網路連線。錯誤訊息: {e}")
-        return None
+        st.error(f"資料讀取錯誤：無法解析 Google Sheet 檔案。")
+        return pd.DataFrame() 
 
-# 執行讀取
 df = load_data(sheet_url)
 
-if df is not None:
-    # --- 3. 側邊欄：強大的篩選器 ---
-    st.sidebar.header("🔍 篩選功能")
+# --- 3. 顯示介面與功能 ---
+if not df.empty and "月份" in df.columns:
+    
+    # 樣式定義 (白藍交替 + 小團高亮)
+    def highlight_rows(row):
+        is_even_row = row.name % 2 == 0
+        base_bg = "#FFFFFF" if is_even_row else "#E6F0FF"
+        if row['type'] in ['small', 'mixed']:
+            style = f'font-weight: bold; color: #8B4513; background-color: #FFF8DC' 
+        else:
+            style = f'color: #4B3621; background-color: {base_bg}'
+        return [style] * len(row)
 
-    # [功能 A] 篩選月份
-    if "月份" in df.columns:
-        all_months = df["月份"].unique().tolist()
-        # 預設全選，讓大家一進來看到所有行程
-        selected_month = st.sidebar.multiselect("選擇月份", all_months, default=all_months)
-    else:
-        selected_month = []
-
-    # [功能 B] 關鍵字搜尋
+    st.sidebar.header("🔍 排練篩選")
+    st.sidebar.markdown("**您的身份是？**")
+    show_small = st.sidebar.checkbox("🙋‍♂️ 我有參加「室內團 / 小團」", value=False)
     st.sidebar.markdown("---")
-    search_keyword = st.sidebar.text_input("🔎 搜尋關鍵字", placeholder="輸入: 遊藝,小團, ...")
 
-    # --- 4. 資料篩選邏輯 ---
+    all_months = df["月份"].unique().tolist()
+    selected_month = st.sidebar.multiselect("選擇月份", all_months, default=all_months)
+    search_keyword = st.sidebar.text_input("🔎 關鍵字搜尋")
+
+    # --- 過濾邏輯 ---
     filtered_df = df.copy()
-
-    # 執行月份篩選
-    if selected_month and "月份" in filtered_df.columns:
+    if not show_small:
+        filtered_df = filtered_df[filtered_df['type'].isin(['large', 'mixed'])]
+    if selected_month:
         filtered_df = filtered_df[filtered_df["月份"].isin(selected_month)]
-
-    # 執行關鍵字搜尋 (搜尋所有欄位)
     if search_keyword:
         mask = filtered_df.apply(lambda x: x.astype(str).str.contains(search_keyword, case=False).any(), axis=1)
         filtered_df = filtered_df[mask]
 
-    # --- 5. 主畫面顯示 ---
+    # --- 🌟 聰明提醒：下次排練置頂 (加入客製化文字) ---
+    today = datetime.now().date()
+    today_str = datetime.now().strftime("%m/%d")
+    is_rehearsal_today = False
     
-    # [亮點功能] 自動偵測「今天」有沒有排練
-    today_str = datetime.now().strftime("%m/%d") # 抓取今天日期 (格式如 11/27)
-    # today_str = "11/28" # 測試用：您可以把這行打開，假裝今天是 11/28 看看效果
-    
-    if '日期' in df.columns:
-        # 模糊比對：只要日期欄位裡包含今天的日期字串
-        today_rehearsal = df[df['日期'].astype(str).str.contains(today_str, na=False)]
-        
-        if not today_rehearsal.empty:
-            st.success(f"🔔 **提醒：今天 ({today_str}) 有排練喔！請準時出席。我們不見不散~**")
-            # 特別顯示今天的行程
-            st.dataframe(today_rehearsal, use_container_width=True, hide_index=True)
-        else:
-            # 如果今天沒排練，顯示這句貼心的話
-            st.info(f"🍵 今天 ({today_str}) 沒有排練，讓喉嚨休息一下吧！ ~音樂組 關心您~ ❤️")
+    upcoming_rehearsals = filtered_df[filtered_df['datetime'].dt.date >= today].sort_values(by='datetime', na_position='last')
 
-    st.subheader(f"📅 排練日程表 ({len(filtered_df)} 筆資料)")
+    if not upcoming_rehearsals.empty and pd.notna(upcoming_rehearsals.iloc[0]['datetime']):
+        next_rehearsal = upcoming_rehearsals.iloc[0]
+        next_date = next_rehearsal['日期']
+        next_time = next_rehearsal['時間']
+        next_location = next_rehearsal['場地']
+
+        if next_rehearsal['datetime'].date() == today:
+             is_rehearsal_today = True
+             # 貼心訊息 1: 今天有排練
+             st.success(f"🔔 **提醒：今天 ({next_date}) 有排練喔！請準時出席。我們不見不散~** {next_time} 在 {next_location}")
+        else:
+             # 貼心訊息 2: 下次排練
+             st.info(f"✨ **下次排練提醒：** {next_date} {next_time} 在 **{next_location}**！")
+
+    # 顯示「今天沒有」的貼心訊息 (只在今天沒排練，但未來還有排練時顯示)
+    if not is_rehearsal_today:
+        if not upcoming_rehearsals.empty:
+            st.info(f"🍵 今天 ({today_str}) 沒有排練，讓喉嚨休息一下吧！ ~音樂組 關心您~ ❤️")
+        else:
+            # 如果連未來排練都沒有 (空閒中)
+            st.info("🥳 恭喜！本學期排練行程已全部結束，請靜候新一波公告！")
+
+
+    # 應用樣式與顯示
+    styled_df = filtered_df.reset_index(drop=True).style.apply(highlight_rows, axis=1)
+    columns_to_display = [col for col in filtered_df.columns if col not in ['type', 'datetime', '地圖連結']]
     
-    # [美化表格] 設定欄位顯示方式
+    st.subheader(f"📅 排練日程表 ({len(filtered_df)} 筆)")
+    
     st.dataframe(
-        filtered_df,
-        use_container_width=True, # 填滿視窗
-        hide_index=True,          # 隱藏醜醜的 0,1,2 索引
+        styled_df[columns_to_display], 
+        use_container_width=True,
+        hide_index=True,
         column_config={
+            "進度內容": st.column_config.TextColumn("進度內容", width="large"),
+            "備註": st.column_config.TextColumn("備註", help="⚠️"),
             "月份": st.column_config.TextColumn("月份", width="small"),
-            "日期": st.column_config.TextColumn("日期", width="medium"),
-            "時段": st.column_config.TextColumn("時段", width="small"),
-            "時間": st.column_config.TextColumn("時間", width="medium"),
-            "進度內容": st.column_config.TextColumn(
-                "進度內容", 
-                width="large", 
-                help="💡 包含分團與詳細曲目"
-            ),
-            "場地": st.column_config.TextColumn("場地", width="medium"),
-            "備註": st.column_config.TextColumn(
-                "備註", 
-                width="medium",
-                help="⚠️ 重要出席提醒"
-            ),
-        }
+            "場地": st.column_config.LinkColumn(
+                "場地 (導航)", 
+                display_funcs=lambda x: x, 
+                href="地圖連結", 
+                width="medium"
+            )
+        },
+        height=500
     )
 
-    st.markdown("---")
-    st.caption("資料來源：SCU Choir Google 雲端排練表 | 資料更新：即時同步")
+    st.caption("🎨 圖例說明： 🟤 一般字體 = 大團行程 | 🟠 **粗體褐字 = 包含小團/室內團行程**")
+
+else:
+    st.warning("⚠️ 目前讀取不到有效資料，請檢查 Google Sheet 連結和內容。")
+
+st.markdown("---")
+st.caption("SCU Choir 2025 | Design with 🤎")
