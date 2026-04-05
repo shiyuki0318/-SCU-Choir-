@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🎵 東吳校友合唱團 ~ SCU Choir ~ | 2026 排練看板")
+st.title("🎵 東吳校友合唱團 ~ SCU Choir ~ | 2026 排練看板(暫定版)")
 st.markdown("### 🍂 溫暖排練，效率滿點")
 st.markdown("---")
 
