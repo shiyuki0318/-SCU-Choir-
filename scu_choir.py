@@ -60,22 +60,30 @@ def load_data(url):
         df = df[df['type'] != 'musician']
 
         # 🌟【新增功能】：日期圖示系統 (老師🤵 / 演出🎤)
-        def add_status_icons(row):
+        def format_date_with_weekday_and_icons(row):
+            dt = row['datetime']
             note = str(row['備註'])
             content = str(row['進度內容'])
-            date_str = str(row['日期'])
+            
+            # 如果 datetime 解析成功，透過 Python 自動算出星期幾並組合
+            if pd.notna(dt):
+                weekday_map = {0: '一', 1: '二', 2: '三', 3: '四', 4: '五', 5: '六', 6: '日'}
+                date_str = f"{dt.month}/{dt.day} ({weekday_map[dt.weekday()]})"
+            else:
+                # 如果遇到無法解析成日期的特殊文字，就維持 Google Sheet 原本的樣子
+                date_str = str(row['日期']) 
             
             # 1. 客席老師
             if "老師" in note and "🤵" not in date_str:
                 date_str = f"{date_str} 🤵"
             
-            # 2. 演出 (新增這段)
+            # 2. 演出 
             if ("演出" in note or "演出" in content) and "🎤" not in date_str:
                 date_str = f"{date_str} 🎤"
                 
             return date_str
 
-        df['日期'] = df.apply(add_status_icons, axis=1)
+        df['日期'] = df.apply(format_date_with_weekday_and_icons, axis=1)
         
         return df
     except Exception as e:
